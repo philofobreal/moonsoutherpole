@@ -65,6 +65,53 @@
             z-index: 999; pointer-events: none;
             transition: opacity 1s;
         }
+
+        #view-menu {
+            position: absolute;
+            bottom: 20px; left: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+            pointer-events: auto;
+        }
+
+        .view-btn {
+            width: 50px;
+            height: 50px;
+            background: rgba(10, 15, 20, 0.9);
+            border: 2px solid #00ffaa;
+            color: #00ffaa;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            transition: all 0.2s;
+            box-shadow: 0 0 10px rgba(0, 255, 170, 0.2);
+            font-weight: bold;
+        }
+
+        .view-btn:hover {
+            background: rgba(0, 255, 170, 0.1);
+            box-shadow: 0 0 20px rgba(0, 255, 170, 0.4);
+        }
+
+        .view-btn.active {
+            background: rgba(0, 255, 170, 0.2);
+            box-shadow: 0 0 20px rgba(0, 255, 170, 0.6);
+            border-color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+        }
+
+        .view-icon {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
     </style>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -109,6 +156,18 @@
         <label>Eltolás Z <span id="val-z">7.1</span></label>
         <input type="range" id="calZ" min="-50" max="50" step="0.1" value="7.1">
     </div>
+
+    <div id="view-menu">
+        <button class="view-btn active" id="view-top" title="Felülnézet">
+            <div class="view-icon">◻</div>
+            <span style="font-size: 8px;">TOP</span>
+        </button>
+        <button class="view-btn" id="view-side" title="Oldalnézet forgatható">
+            <div class="view-icon">▯</div>
+            <span style="font-size: 8px;">SIDE</span>
+        </button>
+    </div>
+
     <div id="tooltip"></div>
 
 <script>
@@ -187,6 +246,12 @@
     renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
 
+    // --- NÉZET KEZELÉS ---
+    let currentView = 'top'; // 'top' vagy 'side'
+    const viewState = {
+        rotation: 0 // Az Y tengely körüli forgatás az oldal nézetben
+    };
+
     // --- KAMERA VEZÉRLÉS (SIKLÓ + ZOOM + BILLENTYŰZET) ---
     const cameraControl = {
         isDragging: false,
@@ -209,9 +274,16 @@
             const deltaX = e.clientX - cameraControl.previousMousePosition.x;
             const deltaY = e.clientY - cameraControl.previousMousePosition.y;
             
-            // Sikló: X tengelyen balra-jobbra, Z tengelyen előre-hátra
-            camera.position.x -= deltaX * cameraControl.panSpeed;
-            camera.position.z -= deltaY * cameraControl.panSpeed;
+            if (currentView === 'top') {
+                // Sikló: X tengelyen balra-jobbra, Z tengelyen előre-hátra
+                camera.position.x -= deltaX * cameraControl.panSpeed;
+                camera.position.z -= deltaY * cameraControl.panSpeed;
+            } else if (currentView === 'side') {
+                // Oldal nézet: Y tengely körüli forgatás
+                viewState.rotation += deltaX * 0.01;
+                // Függőleges mozgás
+                camera.position.y += deltaY * cameraControl.panSpeed;
+            }
             
             cameraControl.previousMousePosition = { x: e.clientX, y: e.clientY };
         }
@@ -520,18 +592,33 @@
     function animate() {
         requestAnimationFrame(animate);
         
+        // --- NÉZET FRISSÍTÉS ---
+        if (currentView === 'top') {
+            // Felülnézet: fix pozíció, sikló kontroll
+            // Az egér kontroll már kezeli
+        } else if (currentView === 'side') {
+            // Oldal nézet: középpont körüli forgatás
+            const distance = 60;
+            const angle = viewState.rotation;
+            camera.position.x = Math.sin(angle) * distance;
+            camera.position.z = Math.cos(angle) * distance;
+            camera.lookAt(0, 0, 0);
+        }
+        
         // --- BILLENTYŰZET KEZELÉS (SIKLÓ MOZGÁS) ---
-        if (cameraControl.keyPress.ArrowUp) {
-            camera.position.z -= cameraControl.keySpeed;
-        }
-        if (cameraControl.keyPress.ArrowDown) {
-            camera.position.z += cameraControl.keySpeed;
-        }
-        if (cameraControl.keyPress.ArrowLeft) {
-            camera.position.x -= cameraControl.keySpeed;
-        }
-        if (cameraControl.keyPress.ArrowRight) {
-            camera.position.x += cameraControl.keySpeed;
+        if (currentView === 'top') {
+            if (cameraControl.keyPress.ArrowUp) {
+                camera.position.z -= cameraControl.keySpeed;
+            }
+            if (cameraControl.keyPress.ArrowDown) {
+                camera.position.z += cameraControl.keySpeed;
+            }
+            if (cameraControl.keyPress.ArrowLeft) {
+                camera.position.x -= cameraControl.keySpeed;
+            }
+            if (cameraControl.keyPress.ArrowRight) {
+                camera.position.x += cameraControl.keySpeed;
+            }
         }
 
         raycaster.setFromCamera(mouse, camera);
@@ -610,8 +697,31 @@
     }
 
     // Inicializálás
+    // Inicializálás
     updatePositions();
     animate();
+
+    // --- NÉZET MENÜ KEZELÉS ---
+    document.getElementById('view-top').addEventListener('click', () => {
+        currentView = 'top';
+        camera.position.set(0, 35, 50);
+        camera.lookAt(0, 0, 0);
+        viewState.rotation = 0;
+        
+        document.getElementById('view-top').classList.add('active');
+        document.getElementById('view-side').classList.remove('active');
+    });
+
+    document.getElementById('view-side').addEventListener('click', () => {
+        currentView = 'side';
+        viewState.rotation = 0;
+        const distance = 60;
+        camera.position.set(0, 35, distance);
+        camera.lookAt(0, 0, 0);
+        
+        document.getElementById('view-side').classList.add('active');
+        document.getElementById('view-top').classList.remove('active');
+    });
 
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
