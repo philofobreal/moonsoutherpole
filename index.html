@@ -320,6 +320,74 @@
         }
     });
 
+    // --- TOUCH KEZELÉS (MOBILOS GESZTÚRÁK) ---
+    const touchControl = {
+        fingers: 0,
+        startDistance: 0,
+        startZoom: 0,
+        prevX: 0,
+        prevY: 0,
+        isZooming: false
+    };
+
+    renderer.domElement.addEventListener('touchstart', (e) => {
+        touchControl.fingers = e.touches.length;
+        
+        if (e.touches.length === 1) {
+            // Single tap/drag indítás
+            touchControl.prevX = e.touches[0].clientX;
+            touchControl.prevY = e.touches[0].clientY;
+            touchControl.isZooming = false;
+        } else if (e.touches.length === 2) {
+            // Pinch zoom indítás
+            touchControl.isZooming = true;
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            touchControl.startDistance = Math.sqrt(dx * dx + dy * dy);
+            touchControl.startZoom = camera.position.length();
+        }
+    }, { passive: false });
+
+    renderer.domElement.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        
+        if (e.touches.length === 1 && !touchControl.isZooming) {
+            // Single finger drag: Pan (TOP) vagy Rotate (SIDE)
+            const deltaX = e.touches[0].clientX - touchControl.prevX;
+            const deltaY = e.touches[0].clientY - touchControl.prevY;
+            
+            if (currentView === 'top') {
+                // TOP nézet: sikló mozgatás
+                camera.position.x -= deltaX * cameraControl.panSpeed;
+                camera.position.z -= deltaY * cameraControl.panSpeed;
+            } else if (currentView === 'side') {
+                // SIDE nézet: forgatás + függőleges
+                viewState.rotation += deltaX * 0.01;
+                camera.position.y += deltaY * cameraControl.panSpeed;
+            }
+            
+            touchControl.prevX = e.touches[0].clientX;
+            touchControl.prevY = e.touches[0].clientY;
+        } else if (e.touches.length === 2) {
+            // Two finger pinch: Zoom
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const currentDistance = Math.sqrt(dx * dx + dy * dy);
+            const ratio = currentDistance / touchControl.startDistance;
+            
+            const direction = camera.position.clone().normalize();
+            const newZoom = touchControl.startZoom / ratio;
+            const zoomed = Math.max(cameraControl.minZoom, Math.min(cameraControl.maxZoom, newZoom));
+            
+            camera.position.copy(direction.multiplyScalar(zoomed));
+        }
+    }, { passive: false });
+
+    renderer.domElement.addEventListener('touchend', (e) => {
+        touchControl.fingers = e.touches.length;
+        touchControl.isZooming = false;
+    }, { passive: false });
+
     // --- VILÁGÍTÁS ---
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.1); 
     scene.add(ambientLight);
